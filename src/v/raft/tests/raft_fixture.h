@@ -19,6 +19,7 @@
 #include "model/timeout_clock.h"
 #include "raft/consensus_client_protocol.h"
 #include "raft/coordinated_recovery_throttle.h"
+#include "raft/errc.h"
 #include "raft/fwd.h"
 #include "raft/heartbeat_manager.h"
 #include "raft/recovery_memory_quota.h"
@@ -39,6 +40,7 @@
 #include <boost/range/irange.hpp>
 
 #include <ranges>
+#include <system_error>
 namespace raft {
 
 inline constexpr raft::group_id test_group(123);
@@ -526,6 +528,7 @@ public:
                 .then([&state] { return state.result; });
           });
     }
+
     template<typename Func>
     auto
     retry_with_leader(model::timeout_clock::time_point deadline, Func&& f) {
