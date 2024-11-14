@@ -17,7 +17,7 @@ import (
 	"os"
 	"strings"
 
-	dataplanev1alpha1 "buf.build/gen/go/redpandadata/dataplane/protocolbuffers/go/redpanda/api/dataplane/v1alpha1"
+	dataplanev1alpha2 "buf.build/gen/go/redpandadata/dataplane/protocolbuffers/go/redpanda/api/dataplane/v1alpha2"
 	"connectrpc.com/connect"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/adminapi"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
@@ -87,7 +87,7 @@ The --detailed flag (-d) opts in to printing extra per-processor information.
 				cl, err := publicapi.NewDataPlaneClientSet(url, p.CurrentAuth().AuthToken)
 				out.MaybeDie(err, "unable to initialize cloud client: %v", err)
 
-				res, err := cl.Transform.ListTransforms(cmd.Context(), connect.NewRequest(&dataplanev1alpha1.ListTransformsRequest{}))
+				res, err := cl.Transform.ListTransforms(cmd.Context(), connect.NewRequest(&dataplanev1alpha2.ListTransformsRequest{}))
 				out.MaybeDie(err, "unable to list transforms from Cloud: %v", err)
 				l = dataplaneToAdminTransformMetadata(res.Msg.Transforms)
 			} else {
@@ -192,7 +192,7 @@ func printDetailed(f config.OutFormatter, d []detailedTransformMetadata, w io.Wr
 	}
 }
 
-func dataplaneToAdminTransformMetadata(transforms []*dataplanev1alpha1.TransformMetadata) []adminapi.TransformMetadata {
+func dataplaneToAdminTransformMetadata(transforms []*dataplanev1alpha2.TransformMetadata) []adminapi.TransformMetadata {
 	var transformMetadata []adminapi.TransformMetadata
 	for _, t := range transforms {
 		var (
