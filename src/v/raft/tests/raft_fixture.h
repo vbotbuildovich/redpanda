@@ -158,7 +158,8 @@ public:
       leader_update_clb_t leader_update_clb,
       bool enable_longest_log_detection,
       config::binding<std::chrono::milliseconds> election_timeout,
-      config::binding<std::chrono::milliseconds> heartbeat_interval);
+      config::binding<std::chrono::milliseconds> heartbeat_interval,
+      bool with_offset_translation = false);
 
     raft_node_instance(
       model::node_id id,
@@ -168,7 +169,8 @@ public:
       leader_update_clb_t leader_update_clb,
       bool enable_longest_log_detection,
       config::binding<std::chrono::milliseconds> election_timeout,
-      config::binding<std::chrono::milliseconds> heartbeat_interval);
+      config::binding<std::chrono::milliseconds> heartbeat_interval,
+      bool with_offset_translation = false);
 
     raft_node_instance(const raft_node_instance&) = delete;
     raft_node_instance(raft_node_instance&&) noexcept = delete;
@@ -259,6 +261,7 @@ private:
     bool _enable_longest_log_detection;
     config::binding<std::chrono::milliseconds> _election_timeout;
     config::binding<std::chrono::milliseconds> _heartbeat_interval;
+    bool _with_offset_translation;
 };
 
 class raft_fixture
@@ -523,6 +526,26 @@ public:
         _heartbeat_interval.update(std::move(timeout));
     }
 
+    void enable_offset_translation() { _with_offset_translation = true; }
+
+protected:
+    class raft_not_leader_exception : std::exception {};
+
+    template<std::derived_from<raft_fixture> Subclass>
+    ss::future<> test_with_leader(
+      model::timeout_clock::duration timeout,
+      ss::future<> (Subclass::*method)(raft_node_instance& leader)) {
+        co_await retry_with_leader(
+          model::timeout_clock::now() + timeout,
+          [this, method](raft_node_instance& leader) {
+              return ((static_cast<Subclass*>(this)->*method)(leader))
+                .then([] { return errc::success; })
+                .handle_exception_type([](const raft_not_leader_exception&) {
+                    return errc::not_leader;
+                });
+          });
+    }
+
 private:
     void validate_leaders();
 
@@ -536,6 +559,7 @@ private:
     std::optional<leader_update_clb_t> _leader_clb;
     config::mock_property<std::chrono::milliseconds> _election_timeout{500ms};
     config::mock_property<std::chrono::milliseconds> _heartbeat_interval{50ms};
+    bool _with_offset_translation = false;
 };
 
 template<class... STM>
