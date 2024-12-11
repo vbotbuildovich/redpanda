@@ -33,7 +33,6 @@
 #include <google/protobuf/any.pb.h>
 #include <google/protobuf/api.pb.h>
 #include <google/protobuf/compiler/parser.h>
-#include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/duration.pb.h>
 #include <google/protobuf/empty.pb.h>
@@ -344,8 +343,8 @@ build_file(pb::DescriptorPool& dp, const pb::FileDescriptorProto& fdp) {
 ///
 /// Recursively import references into the DescriptorPool, building the
 /// files on stack unwind.
-ss::future<const pb::FileDescriptor*> build_file_with_refs(
-  pb::DescriptorPool& dp, sharded_store& store, canonical_schema schema) {
+ss::future<pb::FileDescriptorProto> build_file_with_refs(
+  pb::DescriptorPool& dp, schema_getter& store, canonical_schema schema) {
     for (const auto& ref : schema.def().refs()) {
         if (dp.FindFileByName(ref.name)) {
             continue;
@@ -359,13 +358,15 @@ ss::future<const pb::FileDescriptor*> build_file_with_refs(
     }
 
     parser p;
-    co_return build_file(dp, p.parse(schema));
+    auto new_fdp = p.parse(schema);
+    build_file(dp, new_fdp);
+    co_return new_fdp;
 }
 
 ///\brief Import a schema in the DescriptorPool and return the
 /// FileDescriptor.
-ss::future<const pb::FileDescriptor*> import_schema(
-  pb::DescriptorPool& dp, sharded_store& store, canonical_schema schema) {
+ss::future<pb::FileDescriptorProto> import_schema(
+  pb::DescriptorPool& dp, schema_getter& store, canonical_schema schema) {
     try {
         co_return co_await build_file_with_refs(dp, store, schema.share());
     } catch (const exception& e) {
@@ -377,6 +378,7 @@ ss::future<const pb::FileDescriptor*> import_schema(
 struct protobuf_schema_definition::impl {
     pb::DescriptorPool _dp;
     const pb::FileDescriptor* fd{};
+    pb::FileDescriptorProto fdp;
     protobuf_renderer_v2 v2_renderer{protobuf_renderer_v2::no};
 
     /**
@@ -469,7 +471,8 @@ ss::future<protobuf_schema_definition>
 make_protobuf_schema_definition(sharded_store& store, canonical_schema schema) {
     auto impl = ss::make_shared<protobuf_schema_definition::impl>();
     auto refs = schema.def().refs();
-    impl->fd = co_await import_schema(impl->_dp, store, std::move(schema));
+    impl->fdp = co_await import_schema(impl->_dp, store, std::move(schema));
+    impl->fd = impl->_dp.FindFileByName(impl->fdp.name());
     if (auto* s = dynamic_cast<const sharded_store*>(&store); s != nullptr) {
         impl->v2_renderer = s->protobuf_v2_renderer();
     }
