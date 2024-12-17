@@ -33,6 +33,7 @@
 #include "raft/recovery_memory_quota.h"
 #include "raft/service.h"
 #include "raft/state_machine_manager.h"
+#include "raft/tests/failure_injectable_log.h"
 #include "raft/types.h"
 #include "random/generators.h"
 #include "ssx/sformat.h"
@@ -273,9 +274,7 @@ public:
 
     ss::shared_ptr<in_memory_test_protocol> get_protocol() { return _protocol; }
 
-
-    service_t& get_service() { return _service; }
-
+    ss::shared_ptr<failure_injectable_log> f_injectable_log() { return _f_log; }
 
     service_t& get_service() { return _service; }
 
@@ -301,6 +300,7 @@ private:
     ss::sharded<fixture_group_manager> _group_manager;
     fixture_shard_manager _shard_manager{};
     service_t _service;
+    ss::shared_ptr<raft::failure_injectable_log> _f_log;
 };
 
 class raft_fixture
