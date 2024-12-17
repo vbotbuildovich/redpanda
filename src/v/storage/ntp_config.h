@@ -299,6 +299,16 @@ public:
         return cleanup_policy_override().value_or(cluster_default);
     }
 
+    ntp_config copy() const {
+        return {
+          _ntp,
+          _base_dir,
+          _overrides ? std::make_unique<default_overrides>(*_overrides)
+                     : nullptr,
+          _revision_id,
+          _initial_rev};
+    }
+
 private:
     model::ntp _ntp;
     /// \brief currently this is the basedir. In the future
