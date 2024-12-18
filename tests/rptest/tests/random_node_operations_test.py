@@ -25,7 +25,7 @@ from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsum
 from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST, PREV_VERSION_LOG_ALLOW_LIST, SISettings
 from rptest.services.redpanda_installer import RedpandaInstaller
 from rptest.utils.mode_checks import cleanup_on_early_exit, skip_debug_mode
-from rptest.utils.node_operations import FailureInjectorBackgroundThread, NodeOpsExecutor, generate_random_workload
+from rptest.utils.node_operations import FailureInjectorBackgroundThread, NodeOpsExecutor, generate_random_workload, verify_offset_translator_state_consistent
 
 from rptest.clients.offline_log_viewer import OfflineLogViewer
 
@@ -529,6 +529,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         if with_tiered_storage:
             self.redpanda.stop_and_scrub_object_storage()
 
+        verify_offset_translator_state_consistent(self.redpanda)
         # Validate that the controller log written during the test is readable by offline log viewer
         log_viewer = OfflineLogViewer(self.redpanda)
         for node in self.redpanda.started_nodes():
