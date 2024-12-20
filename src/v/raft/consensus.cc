@@ -2253,6 +2253,7 @@ void consensus::validate_offset_translator_delta(
           "than expected: {}",
           meta,
           last_delta);
+        _probe->offset_translator_inconsistency_error();
     }
 }
 
