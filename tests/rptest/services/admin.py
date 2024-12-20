@@ -1709,3 +1709,15 @@ class Admin:
 
         path = f"migrations/{migration_id}"
         return self._request("DELETE", path, node=node)
+
+    def unsafe_abort_group_transaction(self, group_id: str, *, pid: int,
+                                       epoch: int, sequence: int):
+        params = {
+            "producer_id": pid,
+            "producer_epoch": epoch,
+            "sequence": sequence,
+        }
+        params = "&".join([f"{k}={v}" for k, v in params.items()])
+        return self._request(
+            'POST',
+            f"transaction/unsafe_abort_group_transaction/{group_id}?{params}")
