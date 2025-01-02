@@ -81,6 +81,8 @@ private:
         model::timestamp batch_ts;
         model::timeout_clock::duration timeout;
 
+        bool expired_deprecated_fence_tx() const;
+
         auto serde_fields() {
             return std::tie(fence_type, begin_offset, batch_ts, timeout);
         }
@@ -93,6 +95,7 @@ private:
         per_group_state() = default;
 
         void maybe_add_tx_begin(
+          const kafka::group_id&,
           model::record_batch_type fence_type,
           model::producer_identity pid,
           model::offset offset,
