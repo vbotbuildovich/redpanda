@@ -1405,6 +1405,21 @@ ss::future<std::error_code> controller_backend::create_partition(
             xst_state = it->second;
         }
 
+        /**
+         * Reset remote topic properties if a topic is recovered from tiered
+         * storage and current node is joining replica set. A node is joining
+         * replica set if its initial nodes set is empty.
+         */
+        auto rtp = cfg->properties.remote_topic_properties;
+        if (initial_brokers.empty() && rtp.has_value()) {
+            // reset remote topic properties
+            vlog(
+              clusterlog.info,
+              "[{}] Disabling remote recovery while creating partition "
+              "replica. Current node is added to the replica set as learner.",
+              ntp);
+            rtp.reset();
+        }
         // we use offset as an rev as it is always increasing and it
         // increases while ntp is being created again
         try {
@@ -1419,7 +1434,7 @@ ss::future<std::error_code> controller_backend::create_partition(
               raft::with_learner_recovery_throttle::yes,
               raft::keep_snapshotted_log::no,
               std::move(xst_state),
-              cfg->properties.remote_topic_properties,
+              std::move(rtp),
               read_replica_bucket,
               cfg->properties.remote_label,
               cfg->properties.remote_topic_namespace_override);
