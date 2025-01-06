@@ -2748,7 +2748,8 @@ void application::start_runtime_services(
             cloud_storage_api,
             feature_table,
             controller->get_topics_state());
-          pm.register_factory<kafka::group_tx_tracker_stm_factory>();
+          pm.register_factory<kafka::group_tx_tracker_stm_factory>(
+            feature_table);
       })
       .get();
     partition_manager.invoke_on_all(&cluster::partition_manager::start).get();

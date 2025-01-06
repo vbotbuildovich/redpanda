@@ -1478,6 +1478,10 @@ class Admin:
         path = f"debug/partition/{namespace}/{topic}/{partition}"
         return self._request("GET", path, node=node).json()
 
+    def get_producers_state(self, namespace, topic, partition, node=None):
+        path = f"debug/producers/{namespace}/{topic}/{partition}"
+        return self._request("GET", path, node=node).json()
+
     def get_local_storage_usage(self, node=None):
         """
         Get the local storage usage report.
@@ -1709,3 +1713,15 @@ class Admin:
 
         path = f"migrations/{migration_id}"
         return self._request("DELETE", path, node=node)
+
+    def unsafe_abort_group_transaction(self, group_id: str, *, pid: int,
+                                       epoch: int, sequence: int):
+        params = {
+            "producer_id": pid,
+            "producer_epoch": epoch,
+            "sequence": sequence,
+        }
+        params = "&".join([f"{k}={v}" for k, v in params.items()])
+        return self._request(
+            'POST',
+            f"transaction/unsafe_abort_group_transaction/{group_id}?{params}")
