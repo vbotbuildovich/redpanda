@@ -6,13 +6,13 @@ go 1.22.2
 replace github.com/hamba/avro/v2 => github.com/redpanda-data/go-avro/v2 v2.0.0-20240405204525-77b1144dc525
 
 require (
-	buf.build/gen/go/redpandadata/cloud/connectrpc/go v1.16.2-20240820164511-1d38ab631312.1
-	buf.build/gen/go/redpandadata/cloud/protocolbuffers/go v1.34.2-20240820164511-1d38ab631312.2
-	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.34.2-20240905175347-86054fc9276a.2
-	buf.build/gen/go/redpandadata/dataplane/connectrpc/go v1.16.2-20240823133854-b83c57715214.1
-	buf.build/gen/go/redpandadata/dataplane/protocolbuffers/go v1.34.2-20240823133854-b83c57715214.2
-	cloud.google.com/go/compute/metadata v0.5.0
-	connectrpc.com/connect v1.16.2
+	buf.build/gen/go/redpandadata/cloud/connectrpc/go v1.17.0-20241024195046-353ea4645e3d.1
+	buf.build/gen/go/redpandadata/cloud/protocolbuffers/go v1.35.1-20241024195046-353ea4645e3d.1
+	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.35.1-20240917150400-3f349e63f44a.1
+	buf.build/gen/go/redpandadata/dataplane/connectrpc/go v1.17.0-20241112225414-3759fedba3f3.1
+	buf.build/gen/go/redpandadata/dataplane/protocolbuffers/go v1.35.1-20241112225414-3759fedba3f3.1
+	cloud.google.com/go/compute/metadata v0.5.2
+	connectrpc.com/connect v1.17.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/aws/aws-sdk-go v1.55.5
@@ -57,9 +57,9 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/sync v0.8.0
-	golang.org/x/sys v0.25.0
-	golang.org/x/term v0.24.0
-	google.golang.org/protobuf v1.34.2
+	golang.org/x/sys v0.26.0
+	golang.org/x/term v0.25.0
+	google.golang.org/protobuf v1.35.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.31.0
 	k8s.io/apimachinery v0.31.0
@@ -67,8 +67,8 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.34.2-20240717164558-a6c49f84cc0f.2 // indirect
-	buf.build/gen/go/grpc-ecosystem/grpc-gateway/protocolbuffers/go v1.34.2-20240617172850-a48fcebcf8f1.2 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.35.1-20240920164238-5a7b106cbb87.1 // indirect
+	buf.build/gen/go/grpc-ecosystem/grpc-gateway/protocolbuffers/go v1.35.1-20221127060915-a1ecdc58eccd.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -128,18 +128,18 @@ require (
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.29.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20240909161429-701f63a606c0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
-	golang.org/x/time v0.6.0 // indirect
-	golang.org/x/tools v0.25.0 // indirect
-	google.golang.org/genproto v0.0.0-20240116215550-a9fa1716bcac // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
+	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/time v0.7.0 // indirect
+	golang.org/x/tools v0.26.0 // indirect
+	google.golang.org/genproto v0.0.0-20241104194629-dd2ea8efbc28 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241104194629-dd2ea8efbc28 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.0.3 // indirect
