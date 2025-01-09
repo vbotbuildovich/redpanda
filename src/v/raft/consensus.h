@@ -661,6 +661,8 @@ private:
     template<typename Func>
     ss::future<std::error_code> change_configuration(Func&&);
 
+    model::offset_delta
+    get_offset_delta(const storage::offset_stats&, model::offset) const;
     template<typename Func>
     ss::future<std::error_code>
       interrupt_configuration_change(model::revision_id, Func);
@@ -787,6 +789,8 @@ private:
     flush_delay_t compute_max_flush_delay() const;
     ss::future<> do_flush();
 
+    void validate_offset_translator_delta(
+      const protocol_metadata&, const storage::offset_stats& lstats);
     // args
     vnode _self;
     raft::group_id _group;
