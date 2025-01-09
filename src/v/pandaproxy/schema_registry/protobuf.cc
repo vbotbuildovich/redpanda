@@ -69,6 +69,9 @@
 
 namespace pandaproxy::schema_registry {
 
+// Make backporting easier.
+using schema_getter = sharded_store;
+
 namespace pb = google::protobuf;
 
 struct descriptor_hasher {
