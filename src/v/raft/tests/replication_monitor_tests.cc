@@ -58,26 +58,35 @@ public:
 
         for (auto& [id, node] : nodes()) {
             if (id == leader.get_vnode().id()) {
-                node->on_dispatch(
-                  [](model::node_id, raft::msg_type) { return ss::sleep(3s); });
+                node->on_dispatch([](model::node_id, raft::msg_type mt) {
+                    if (mt == raft::msg_type::append_entries) {
+                        throw std::runtime_error("dropping_append_entries");
+                    }
+                    return ss::now();
+                });
             }
         }
 
-        std::vector<ss::future<result<replicate_result>>> replicate_f;
-        replicate_f.reserve(num_waiters());
-        for (size_t i = 0; i < num_waiters(); i++) {
-            replicate_f.push_back(raft->replicate(
+        std::vector<ss::future<>> enqueued;
+        std::vector<ss::future<result<raft::replicate_result>>> replicated;
+
+        for (auto i = 0; i < num_waiters(); i++) {
+            auto stages = raft->replicate_in_stages(
               make_batches({{"k", "v"}}),
-              replicate_options{raft::consistency_level::quorum_ack}));
+              replicate_options{raft::consistency_level::quorum_ack});
+            enqueued.push_back(std::move(stages.request_enqueued));
+            replicated.push_back(std::move(stages.replicate_finished));
         }
+        auto enqueue_results = co_await ss::when_all(
+          enqueued.begin(), enqueued.end());
+        // block new leadership and step down
+        raft->block_new_leadership();
+        co_await raft->step_down(model::term_id(2), "test");
         auto results = co_await ss::when_all(
-          replicate_f.begin(), replicate_f.end());
+          replicated.begin(), replicated.end());
         for (auto& r : results) {
             auto res = r.get();
             ASSERT_TRUE_CORO(res.has_error());
-            if (res.error() == errc::not_leader) {
-                throw raft_not_leader_exception();
-            }
             ASSERT_EQ_CORO(res.error(), errc::replicated_entry_truncated);
         }
 
@@ -127,6 +136,7 @@ TEST_P_CORO(monitor_test_fixture, replication_monitor_wait) {
     co_await create_simple_group(5);
 
     co_await set_write_caching(write_caching());
+    set_election_timeout(5s);
 
     co_await test_with_leader(
       60s, &monitor_test_fixture::replication_monitor_wait_test);
@@ -137,6 +147,7 @@ TEST_P_CORO(monitor_test_fixture, truncation_detection) {
     co_await create_simple_group(3);
 
     co_await set_write_caching(write_caching());
+    set_election_timeout(5s);
 
     co_await test_with_leader(
       60s, &monitor_test_fixture::truncation_detection_test);
