@@ -24,6 +24,10 @@ class store;
 /// subject or schema_id
 class sharded_store {
 public:
+    explicit sharded_store(
+      protobuf_renderer_v2 v2_renderer = protobuf_renderer_v2::no)
+      : _v2_renderer(v2_renderer) {}
+    ~sharded_store() = default;
     ss::future<> start(is_mutable mut, ss::smp_service_group sg);
     ss::future<> stop();
 
@@ -192,6 +196,10 @@ public:
     //// \brief Throw if the store is not mutable
     void check_mode_mutability(force f) const;
 
+    //// \brief Whether to use the experimental v2 protobuf renderer to support
+    //// normalize=true;
+    protobuf_renderer_v2 protobuf_v2_renderer() const { return _v2_renderer; }
+
 private:
     ss::future<compatibility_result> do_is_compatible(
       schema_version version, canonical_schema new_schema, verbose is_verbose);
@@ -222,6 +230,7 @@ private:
 
     ///\brief Access must occur only on shard 0.
     schema_id _next_schema_id{1};
+    protobuf_renderer_v2 _v2_renderer;
 };
 
 } // namespace pandaproxy::schema_registry
