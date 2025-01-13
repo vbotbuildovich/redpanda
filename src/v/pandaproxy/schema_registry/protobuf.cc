@@ -310,14 +310,6 @@ class io_error_collector final : public pb::io::ErrorCollector {
     };
 
 public:
-#if PROTOBUF_VERSION < 5027000
-    void AddError(int line, int column, const std::string& message) final {
-        _errors.emplace_back(err{level::error, line, column, message});
-    }
-    void AddWarning(int line, int column, const std::string& message) final {
-        _errors.emplace_back(err{level::warn, line, column, message});
-    }
-#else
     void RecordError(int line, int column, std::string_view message) final {
         _errors.emplace_back(
           err{level::error, line, column, ss::sstring{message}});
@@ -326,7 +318,6 @@ public:
         _errors.emplace_back(
           err{level::warn, line, column, ss::sstring{message}});
     }
-#endif
 
     error_info error() const;
 
@@ -338,41 +329,6 @@ private:
 
 class dp_error_collector final : public pb::DescriptorPool::ErrorCollector {
 public:
-#if PROTOBUF_VERSION < 5027000
-    void AddError(
-      const std::string& filename,
-      const std::string& element_name,
-      const pb::Message* descriptor,
-      ErrorLocation location,
-      const std::string& message) final {
-        _errors.emplace_back(err{
-          level::error,
-          ss::sstring{filename},
-          ss::sstring{element_name},
-          descriptor,
-          location,
-          ss::sstring {
-              message
-          }});
-    }
-
-    void AddWarning(
-      const std::string& filename,
-      const std::string& element_name,
-      const pb::Message* descriptor,
-      ErrorLocation location,
-      const std::string& message) final {
-        _errors.emplace_back(err{
-          level::warn,
-          ss::sstring{filename},
-          ss::sstring{element_name},
-          descriptor,
-          location,
-          ss::sstring {
-              message
-          }});
-    }
-#else
     void RecordError(
       std::string_view filename,
       std::string_view element_name,
@@ -402,7 +358,6 @@ public:
           location,
           ss::sstring{message}});
     }
-#endif
 
     error_info error(std::string_view sub) const;
 
@@ -469,11 +424,7 @@ public:
             }
         }
         const auto& sub = schema.sub()();
-#if PROTOBUF_VERSION < 5027000
-        _fdp.set_name(sub.data(), sub.size());
-#else
         _fdp.set_name(std::string_view(sub));
-#endif
         return _fdp;
     }
 
