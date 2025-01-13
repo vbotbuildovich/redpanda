@@ -52,6 +52,22 @@ redpanda_test_cc_library(
 )
 
 redpanda_test_cc_library(
+    name = "failure_injectable_log",
+    srcs = ["failure_injectable_log.cc"],
+    hdrs = [
+        "failure_injectable_log.h",
+    ],
+    include_prefix = "raft/tests",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/v/base",
+        "//src/v/storage",
+        "//src/v/test_utils:gtest",
+        "@seastar",
+    ],
+)
+
+redpanda_test_cc_library(
     name = "raft_fixture",
     srcs = ["raft_fixture.cc"],
     hdrs = [
@@ -60,6 +76,7 @@ redpanda_test_cc_library(
     include_prefix = "raft/tests",
     visibility = ["//visibility:public"],
     deps = [
+        ":failure_injectable_log",
         "//src/v/base",
         "//src/v/bytes:random",
         "//src/v/config",
