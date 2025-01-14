@@ -222,7 +222,8 @@ partition_manifest::full_log_start_kafka_offset() const {
         // the manifest start offset.
         vassert(
           _archive_start_offset <= _start_offset,
-          "Archive start offset {} is greater than the start offset {}",
+          "[{}] Archive start offset {} is greater than the start offset {}",
+          display_name(),
           _archive_start_offset,
           _start_offset);
         return _archive_start_offset - _archive_start_offset_delta;
@@ -283,7 +284,11 @@ partition_manifest::compute_start_kafka_offset_local() const {
 
 partition_manifest::const_iterator
 partition_manifest::segment_containing(kafka::offset o) const {
-    vlog(cst_log.debug, "Metadata lookup using kafka offset {}", o);
+    vlog(
+      cst_log.debug,
+      "{} Metadata lookup using kafka offset {}",
+      display_name(),
+      o);
     if (_segments.empty()) {
         return end();
     }
@@ -443,9 +448,12 @@ void partition_manifest::subtract_from_cloud_log_size(size_t to_subtract) {
     if (to_subtract > _cloud_log_size_bytes) {
         vlog(
           cst_log.warn,
-          "Invalid attempt to subtract from cloud log size of {}. Setting it "
+          "{} Invalid attempt to subtract {} from cloud log size of {}. "
+          "Setting it "
           "to 0 to prevent underflow",
-          _ntp);
+          display_name(),
+          to_subtract,
+          _cloud_log_size_bytes);
         _cloud_log_size_bytes = 0;
     } else {
         _cloud_log_size_bytes -= to_subtract;
@@ -515,16 +523,15 @@ void partition_manifest::set_archive_start_offset(
         vlog(
           cst_log.warn,
           "{} Can't advance archive_start_offset to {} because it's smaller "
-          "than the "
-          "current value {}",
-          _ntp,
+          "than the current value {}",
+          display_name(),
           start_rp_offset,
           _archive_start_offset);
     }
     vlog(
       cst_log.info,
       "{} archive start offset moved to {} archive start delta set to {}",
-      _ntp,
+      display_name(),
       _archive_start_offset,
       _archive_start_offset_delta);
 }
@@ -571,9 +578,8 @@ void partition_manifest::set_archive_clean_offset(
         vlog(
           cst_log.warn,
           "{} Can't advance archive_clean_offset to {} because it's smaller "
-          "than the "
-          "current value {}",
-          _ntp,
+          "than the current value {}",
+          display_name(),
           start_rp_offset,
           _archive_clean_offset);
     }
@@ -596,9 +602,10 @@ void partition_manifest::set_archive_clean_offset(
         if (truncation_point) {
             vassert(
               _archive_clean_offset >= *truncation_point,
-              "Attempt to prefix truncate the spillover manifest list above "
-              "the "
-              "archive clean offest: {} > {}",
+              "[{}] Attempt to prefix truncate the spillover manifest list "
+              "above "
+              "the archive clean offest: {} > {}",
+              display_name(),
               *truncation_point,
               _archive_clean_offset);
             _spillover_manifests.prefix_truncate(*truncation_point);
@@ -609,7 +616,7 @@ void partition_manifest::set_archive_clean_offset(
       cst_log.info,
       "{} archive clean offset moved to {} archive size set to {}; count of "
       "spillover manifests {} -> {}",
-      _ntp,
+      display_name(),
       _archive_clean_offset,
       _archive_size_bytes,
       previous_spillover_manifests_size,
@@ -625,7 +632,7 @@ bool partition_manifest::advance_start_kafka_offset(
     vlog(
       cst_log.info,
       "{} start kafka offset override set to {}",
-      _ntp,
+      display_name(),
       _start_kafka_offset_override);
     return true;
 }
@@ -666,9 +673,10 @@ bool partition_manifest::advance_start_offset(model::offset new_start_offset) {
         if (previous_start_offset > advanced_start_offset) {
             vlog(
               cst_log.error,
-              "Previous start offset is greater than the new one: "
+              "{} Previous start offset is greater than the new one: "
               "previous_start_offset={}, computed_new_start_offset={}, "
               "requested_new_start_offset={}",
+              display_name(),
               previous_start_offset,
               advanced_start_offset,
               new_start_offset);
@@ -769,7 +777,7 @@ std::optional<size_t> partition_manifest::move_aligned_offset_range(
             vlog(
               cst_log.warn,
               "{} segment is already added {}",
-              _ntp,
+              display_name(),
               replacing_segment);
             return std::nullopt;
         }
@@ -889,7 +897,8 @@ size_t partition_manifest::safe_segment_meta_to_add(
                 const auto last_seg = subst.last_segment;
                 vassert(
                   last_seg.has_value(),
-                  "Empty manifest, base_offset: {}",
+                  "[{}] Empty manifest, base_offset: {}",
+                  display_name(),
                   m.base_offset);
 
                 segment_meta_anomalies anomalies;
@@ -1099,7 +1108,7 @@ void partition_manifest::spillover(const segment_meta& spillover_meta) {
         vlog(
           cst_log.debug,
           "{} Applying spillover metadata {}",
-          _ntp,
+          display_name(),
           spillover_meta);
     }
     // Update size of the archived part of the log.
@@ -1135,7 +1144,7 @@ bool partition_manifest::safe_spillover_manifest(const segment_meta& meta) {
         vlog(
           cst_log.warn,
           "{} Can't apply spillover manifest because the manifest is empty, {}",
-          _ntp,
+          display_name(),
           meta);
         return false;
     }
@@ -1145,7 +1154,7 @@ bool partition_manifest::safe_spillover_manifest(const segment_meta& meta) {
           cst_log.warn,
           "{} Can't apply spillover manifest because the start offsets are not "
           "aligned: {} vs {}, {}",
-          _ntp,
+          display_name(),
           so.value(),
           meta.base_offset,
           meta);
@@ -1160,7 +1169,7 @@ bool partition_manifest::safe_spillover_manifest(const segment_meta& meta) {
           cst_log.warn,
           "{} Can't apply spillover manifest because the end of the manifest "
           "is not aligned, {}",
-          _ntp,
+          display_name(),
           meta);
         return false;
     }
@@ -1179,7 +1188,7 @@ bool partition_manifest::safe_spillover_manifest(const segment_meta& meta) {
       "{} Can't apply spillover manifest because the end of the previous "
       "manifest {} "
       "is not aligned with the new one {}",
-      _ntp,
+      display_name(),
       _spillover_manifests.last_segment(),
       meta);
     return false;
@@ -2469,7 +2478,8 @@ partition_manifest::timequery(model::timestamp t) const {
     // Single-offset case should have hit max_t==base_t above
     vassert(
       max_offset > base_offset,
-      "Unexpected offsets {} {} (times {} {})",
+      "[{}] Unexpected offsets {} {} (times {} {})",
+      display_name(),
       base_offset,
       max_offset,
       base_t,
@@ -2683,7 +2693,7 @@ void partition_manifest::process_anomalies(
       cst_log.debug,
       "[{}] Anomalies processed: {{ detected: {}, last_partition_scrub: {}, "
       "last_scrubbed_offset: {} }}",
-      _ntp,
+      display_name(),
       _detected_anomalies,
       _last_partition_scrub,
       _last_scrubbed_offset);
