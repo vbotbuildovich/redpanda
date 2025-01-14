@@ -225,6 +225,20 @@ ss::future<checked<model::term_id, tx::errc>> rm_stm::begin_tx(
     }
     auto synced_term = _insync_term;
     auto [producer, _] = maybe_create_producer(new_pid);
+    auto log_level = ss::log_level::trace;
+    if (unlikely(producer->is_evicted())) {
+        log_level = ss::log_level::warn;
+    }
+    vlogl(
+      _ctx_log,
+      log_level,
+      "attempting begin_tx with producer: {}, pid: {}, sequence: {}, timeout: "
+      "{}, coordinator partition: {}",
+      *producer,
+      new_pid,
+      tx_seq,
+      transaction_timeout_ms,
+      tm);
     co_return co_await producer->run_with_lock(
       [this,
        synced_term,
@@ -449,6 +463,19 @@ ss::future<tx::errc> rm_stm::commit_tx(
     }
     auto synced_term = _insync_term;
     auto [producer, _] = maybe_create_producer(pid);
+    auto log_level = ss::log_level::trace;
+    if (unlikely(producer->is_evicted())) {
+        log_level = ss::log_level::warn;
+    }
+    vlogl(
+      _ctx_log,
+      log_level,
+      "attempting commit_tx with producer: {}, pid: {}, sequence: {}, timeout: "
+      "{}",
+      *producer,
+      pid,
+      tx_seq,
+      timeout);
     if (pid != producer->id()) {
         co_return tx::errc::fenced;
     }
@@ -591,6 +618,19 @@ ss::future<tx::errc> rm_stm::abort_tx(
     }
     auto synced_term = _insync_term;
     auto [producer, _] = maybe_create_producer(pid);
+    auto log_level = ss::log_level::trace;
+    if (unlikely(producer->is_evicted())) {
+        log_level = ss::log_level::warn;
+    }
+    vlogl(
+      _ctx_log,
+      log_level,
+      "attempting abort_tx with producer: {}, pid: {}, sequence: {}, timeout: "
+      "{}",
+      *producer,
+      pid,
+      tx_seq,
+      timeout);
     if (pid != producer->id()) {
         co_return cluster::errc::invalid_producer_epoch;
     }
