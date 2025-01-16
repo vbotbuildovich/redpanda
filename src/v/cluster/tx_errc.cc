@@ -70,6 +70,10 @@ std::ostream& operator<<(std::ostream& o, errc err) {
         return o << "tx::errc::partition_disabled";
     case errc::concurrent_transactions:
         return o << "tx::errc::concurrent_transactions";
+    case errc::invalid_timeout:
+        return o << "tx::errc::invalid_timeout";
+    case errc::producer_creation_error:
+        return o << "tx::errc::producer_creation_error";
     }
     return o;
 }
