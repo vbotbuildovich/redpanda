@@ -700,6 +700,14 @@ struct protobuf_schema_definition::impl {
         return range_proxy<Range>{std::move(copy)};
     }
 
+    auto maybe_sorted_uninterpreted_options(
+      const pb::RepeatedPtrField<pb::UninterpretedOption>& options) const {
+        return maybe_sorted(
+          options, std::less{}, [](const pb::UninterpretedOption& o) {
+              return fmt::format("{}", o);
+          });
+    }
+
     void render_field(
       std::ostream& os,
       pb::Edition edition,
@@ -869,12 +877,8 @@ struct protobuf_schema_definition::impl {
               },
               field_options());
 
-            auto uninterpreted_options = maybe_sorted(
-              options.uninterpreted_option(),
-              std::less{},
-              [](const auto& option) {
-                  return fmt::format("{}", fmt::join(option.name(), "."));
-              });
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              options.uninterpreted_option());
             for (const auto& option : uninterpreted_options) {
                 maybe_print_seperator();
                 fmt::print(os, "{}", option);
@@ -977,12 +981,8 @@ struct protobuf_schema_definition::impl {
                   message.options().no_standard_descriptor_accessor());
             }
         }
-        auto uninterepreted_options = maybe_sorted(
-          message.options().uninterpreted_option(),
-          std::less{},
-          [](const auto& option) {
-              return fmt::format("{}", fmt::join(option.name(), "."));
-          });
+        auto uninterepreted_options = maybe_sorted_uninterpreted_options(
+          message.options().uninterpreted_option());
         for (const auto& option : uninterepreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
         }
@@ -1047,12 +1047,8 @@ struct protobuf_schema_definition::impl {
         for (const int i : oneofs) {
             const auto& decl = message.oneof_decl(i);
             fmt::print(os, "{:{}}oneof {} {{\n", "", indent + 2, decl.name());
-            auto uninterpreted_options = maybe_sorted(
-              decl.options().uninterpreted_option(),
-              std::less{},
-              [](const pb::UninterpretedOption& o) {
-                  return fmt::format("{}", fmt::join(o.name(), ""));
-              });
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              decl.options().uninterpreted_option());
             for (const auto& option : uninterpreted_options) {
                 fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
             }
@@ -1154,12 +1150,8 @@ struct protobuf_schema_definition::impl {
               indent + 2,
               enum_proto.options().deprecated());
         }
-        auto uninterpreted_options = maybe_sorted(
-          enum_proto.options().uninterpreted_option(),
-          std::less{},
-          [](const pb::UninterpretedOption& o) {
-              return fmt::format("{}", fmt::join(o.name(), ""));
-          });
+        auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+          enum_proto.options().uninterpreted_option());
         for (const auto& option : uninterpreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
         }
@@ -1193,13 +1185,9 @@ struct protobuf_schema_definition::impl {
                 }
                 if (!value.options().uninterpreted_option().empty()) {
                     maybe_print_comma();
-                    auto uninterpreted_options = maybe_sorted(
-                      value.options().uninterpreted_option(),
-                      std::less{},
-                      [](const auto& option) {
-                          return fmt::format(
-                            "{}", fmt::join(option.name(), "."));
-                      });
+                    auto uninterpreted_options
+                      = maybe_sorted_uninterpreted_options(
+                        value.options().uninterpreted_option());
                     fmt::print(
                       os, "{}", fmt::join(uninterpreted_options, ", "));
                 }
@@ -1225,12 +1213,8 @@ struct protobuf_schema_definition::impl {
                   indent + 2,
                   service.options().deprecated());
             }
-            auto uninterpreted_options = maybe_sorted(
-              service.options().uninterpreted_option(),
-              std::less{},
-              [](const pb::UninterpretedOption& o) {
-                  return fmt::format("{}", fmt::join(o.name(), "."));
-              });
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              service.options().uninterpreted_option());
             for (const auto& option : uninterpreted_options) {
                 fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
             }
@@ -1265,12 +1249,8 @@ struct protobuf_schema_definition::impl {
                       pb::MethodOptions_IdempotencyLevel_Name(
                         method.options().idempotency_level()));
                 }
-                auto uninterpreted_options = maybe_sorted(
-                  method.options().uninterpreted_option(),
-                  std::less{},
-                  [](const pb::UninterpretedOption& o) {
-                      return fmt::format("{}", fmt::join(o.name(), "."));
-                  });
+                auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+                  method.options().uninterpreted_option());
                 for (const auto& option : uninterpreted_options) {
                     fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
                 }
@@ -1350,12 +1330,8 @@ struct protobuf_schema_definition::impl {
         if (options.has_py_generic_services()) {
             printv("py_generic_services", options.py_generic_services());
         }
-        auto uninterpreted_options = maybe_sorted(
-          options.uninterpreted_option(),
-          std::less{},
-          [](const pb::UninterpretedOption& o) {
-              return fmt::format("{}", fmt::join(o.name(), "."));
-          });
+        auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+          options.uninterpreted_option());
         for (const auto& option : uninterpreted_options) {
             first_option = false;
             fmt::print(os, "option {};\n", option);
