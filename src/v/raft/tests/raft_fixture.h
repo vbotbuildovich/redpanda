@@ -16,6 +16,7 @@
 #include "bytes/iobuf.h"
 #include "bytes/random.h"
 #include "cluster/errc.h"
+#include "config/mock_property.h"
 #include "config/property.h"
 #include "features/feature_table.h"
 #include "model/fundamental.h"
@@ -30,7 +31,9 @@
 #include "raft/group_configuration.h"
 #include "raft/heartbeat_manager.h"
 #include "raft/recovery_memory_quota.h"
+#include "raft/service.h"
 #include "raft/state_machine_manager.h"
+#include "raft/tests/failure_injectable_log.h"
 #include "raft/types.h"
 #include "random/generators.h"
 #include "ssx/sformat.h"
@@ -47,9 +50,6 @@
 
 #include <optional>
 #include <ranges>
-#include <system_error>
-#include <type_traits>
-
 namespace raft {
 
 static constexpr raft::group_id test_group(123);
@@ -70,6 +70,20 @@ struct msg {
     ss::promise<iobuf> resp_data;
 };
 class raft_node_instance;
+/**
+ * Dummy shard and group managers for the fixture to be used
+ * with Raft rpc service implementation.
+ */
+struct fixture_group_manager {
+    ss::lw_shared_ptr<consensus> consensus_for(raft::group_id) { return raft; }
+    ss::lw_shared_ptr<consensus> raft;
+};
+
+struct fixture_shard_manager {
+    std::optional<ss::shard_id> shard_for(raft::group_id) {
+        return ss::this_shard_id();
+    }
+};
 
 struct channel {
     explicit channel(raft_node_instance&);
@@ -83,7 +97,8 @@ struct channel {
     bool is_valid() const;
 
 private:
-    ss::lw_shared_ptr<consensus> raft();
+    ss::future<> do_dispatch_message(msg);
+    raft::service<fixture_group_manager, fixture_shard_manager>& get_service();
     ss::weak_ptr<raft_node_instance> _node;
     ss::chunked_fifo<msg> _messages;
     ss::gate _gate;
@@ -143,7 +158,8 @@ public:
 
 private:
     template<typename ReqT, typename RespT>
-    ss::future<result<RespT>> dispatch(model::node_id, ReqT req);
+    ss::future<result<RespT>>
+    dispatch(model::node_id, ReqT req, rpc::client_opts);
     ss::gate _gate;
     absl::flat_hash_map<model::node_id, std::unique_ptr<channel>> _channels;
     std::vector<dispatch_callback_t> _on_dispatch_handlers;
@@ -160,6 +176,8 @@ inline model::timeout_clock::time_point default_timeout() {
  */
 class raft_node_instance : public ss::weakly_referencable<raft_node_instance> {
 public:
+    using service_t
+      = raft::service<fixture_group_manager, fixture_shard_manager>;
     using leader_update_clb_t
       = ss::noncopyable_function<void(leadership_status)>;
     raft_node_instance(
@@ -170,7 +188,9 @@ public:
       ss::sharded<features::feature_table>& feature_table,
       leader_update_clb_t leader_update_clb,
       bool enable_longest_log_detection,
-      std::chrono::milliseconds election_timeout);
+      config::binding<std::chrono::milliseconds> election_timeout,
+      config::binding<std::chrono::milliseconds> heartbeat_interval,
+      bool with_offset_translation = false);
 
     raft_node_instance(
       model::node_id id,
@@ -179,7 +199,9 @@ public:
       ss::sharded<features::feature_table>& feature_table,
       leader_update_clb_t leader_update_clb,
       bool enable_longest_log_detection,
-      std::chrono::milliseconds election_timeout);
+      config::binding<std::chrono::milliseconds> election_timeout,
+      config::binding<std::chrono::milliseconds> heartbeat_interval,
+      bool with_offset_translation = false);
 
     raft_node_instance(const raft_node_instance&) = delete;
     raft_node_instance(raft_node_instance&&) noexcept = delete;
@@ -249,6 +271,10 @@ public:
 
     ss::shared_ptr<in_memory_test_protocol> get_protocol() { return _protocol; }
 
+    ss::shared_ptr<failure_injectable_log> f_injectable_log() { return _f_log; }
+
+    service_t& get_service() { return _service; }
+
 private:
     model::node_id _id;
     model::revision_id _revision;
@@ -266,6 +292,12 @@ private:
     bool started = false;
     bool _enable_longest_log_detection;
     config::binding<std::chrono::milliseconds> _election_timeout;
+    config::binding<std::chrono::milliseconds> _heartbeat_interval;
+    bool _with_offset_translation;
+    ss::sharded<fixture_group_manager> _group_manager;
+    fixture_shard_manager _shard_manager{};
+    service_t _service;
+    ss::shared_ptr<raft::failure_injectable_log> _f_log;
 };
 
 class raft_fixture
@@ -519,6 +551,7 @@ public:
                 .then([&state] { return state.result; });
           });
     }
+
     template<typename Func>
     auto
     retry_with_leader(model::timeout_clock::time_point deadline, Func&& f) {
@@ -541,7 +574,28 @@ public:
     }
 
     void set_election_timeout(std::chrono::milliseconds timeout) {
-        _election_timeout = timeout;
+        _election_timeout.update(std::move(timeout));
+    }
+    void set_heartbeat_interval(std::chrono::milliseconds timeout) {
+        _heartbeat_interval.update(std::move(timeout));
+    }
+
+protected:
+    class raft_not_leader_exception : std::exception {};
+
+    template<std::derived_from<raft_fixture> Subclass>
+    ss::future<> test_with_leader(
+      model::timeout_clock::duration timeout,
+      ss::future<> (Subclass::*method)(raft_node_instance& leader)) {
+        co_await retry_with_leader(
+          model::timeout_clock::now() + timeout,
+          [this, method](raft_node_instance& leader) {
+              return ((static_cast<Subclass*>(this)->*method)(leader))
+                .then([] { return errc::success; })
+                .handle_exception_type([](const raft_not_leader_exception&) {
+                    return errc::not_leader;
+                });
+          });
     }
 
 private:
@@ -555,7 +609,8 @@ private:
     ss::sharded<features::feature_table> _features;
     bool _enable_longest_log_detection = true;
     std::optional<leader_update_clb_t> _leader_clb;
-    std::chrono::milliseconds _election_timeout = 500ms;
+    config::mock_property<std::chrono::milliseconds> _election_timeout{500ms};
+    config::mock_property<std::chrono::milliseconds> _heartbeat_interval{50ms};
 };
 
 template<class... STM>
