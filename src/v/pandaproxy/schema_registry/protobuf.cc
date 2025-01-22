@@ -49,6 +49,7 @@
 #include <absl/strings/ascii.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/container/flat_set.hpp>
+#include <boost/range/combine.hpp>
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 #include <google/protobuf/any.pb.h>
@@ -133,18 +134,18 @@ struct fmt::formatter<google::protobuf::UninterpretedOption>
         const auto fmt = [&](const auto& val) {
             if (option.has_string_value()) {
                 return fmt::format_to(
-                  ctx.out(), "{} = \"{}\"", fmt::join(option.name(), ""), val);
+                  ctx.out(), "{} = \"{}\"", fmt::join(option.name(), "."), val);
             } else if (option.has_aggregate_value()) {
                 return fmt::format_to(
                   ctx.out(),
                   "{} = {{{}\n{:{}}}}",
-                  fmt::join(option.name(), ""),
+                  fmt::join(option.name(), "."),
                   val,
                   "",
                   indent + 2);
             }
             return fmt::format_to(
-              ctx.out(), "{} = {}", fmt::join(option.name(), ""), val);
+              ctx.out(), "{} = {}", fmt::join(option.name(), "."), val);
         };
         if (option.has_identifier_value()) {
             return fmt(option.identifier_value());
@@ -557,7 +558,8 @@ struct protobuf_schema_definition::impl {
         if (is_normalized) {
             pb::FileDescriptorProto tmp_fdp;
             fd->CopyTo(&tmp_fdp);
-            render_proto(osb.ostream(), std::move(tmp_fdp), *fd);
+            copy_uninterpreted_options(fdp, tmp_fdp);
+            render_proto(osb.ostream(), tmp_fdp, *fd);
         } else {
             render_proto(osb.ostream(), fdp, *fd);
         }
@@ -601,6 +603,100 @@ struct protobuf_schema_definition::impl {
         std::variant<Range, std::reference_wrapper<const Range>> _r;
     };
 
+    template<typename Proto>
+    void copy_options(const Proto& from, Proto& to) const {
+        if (!from.has_options()) {
+            return;
+        }
+        to.mutable_options()->CopyFrom(from.options());
+    }
+
+    void copy_uninterpreted_options(
+      const pb::DescriptorProto& from, pb::DescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [field_from, field_to] :
+             boost::combine(from.field(), *to.mutable_field())) {
+            copy_uninterpreted_options(field_from, field_to);
+        }
+
+        // oneof decl
+        for (auto&& [oneof_from, oneof_to] :
+             boost::combine(from.oneof_decl(), *to.mutable_oneof_decl())) {
+            copy_options(oneof_from, oneof_to);
+        }
+
+        // nested messages
+        for (auto&& [nested_from, nested_to] :
+             boost::combine(from.nested_type(), *to.mutable_nested_type())) {
+            copy_uninterpreted_options(nested_from, nested_to);
+        }
+
+        // nested enums
+        for (auto&& [enum_from, enum_to] :
+             boost::combine(from.enum_type(), *to.mutable_enum_type())) {
+            copy_uninterpreted_options(enum_from, enum_to);
+        }
+
+        // nested extentions
+        for (auto&& [extension_from, extension_to] :
+             boost::combine(from.extension(), *to.mutable_extension())) {
+            copy_uninterpreted_options(extension_from, extension_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::EnumDescriptorProto& from, pb::EnumDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [value_from, value_to] :
+             boost::combine(from.value(), *to.mutable_value())) {
+            copy_options(value_from, value_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::ServiceDescriptorProto& from,
+      pb::ServiceDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [method_from, method_to] :
+             boost::combine(from.method(), *to.mutable_method())) {
+            copy_options(method_from, method_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::FieldDescriptorProto& from,
+      pb::FieldDescriptorProto& to) const {
+        copy_options(from, to);
+    }
+
+    void copy_uninterpreted_options(
+      const pb::FileDescriptorProto& from, pb::FileDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [message_from, message_to] :
+             boost::combine(from.message_type(), *to.mutable_message_type())) {
+            copy_uninterpreted_options(message_from, message_to);
+        }
+
+        for (auto&& [enum_from, enum_to] :
+             boost::combine(from.enum_type(), *to.mutable_enum_type())) {
+            copy_uninterpreted_options(enum_from, enum_to);
+        }
+
+        for (auto&& [extension_from, extension_to] :
+             boost::combine(from.extension(), *to.mutable_extension())) {
+            copy_uninterpreted_options(extension_from, extension_to);
+        }
+
+        for (auto&& [service_from, service_to] :
+             boost::combine(from.service(), *to.mutable_service())) {
+            copy_uninterpreted_options(service_from, service_to);
+        }
+    }
+
     template<
       std::ranges::random_access_range Range,
       typename Comp = std::ranges::less,
@@ -613,6 +709,14 @@ struct protobuf_schema_definition::impl {
         std::decay_t<Range> copy = range;
         std::ranges::sort(copy, comp, proj);
         return range_proxy<Range>{std::move(copy)};
+    }
+
+    auto maybe_sorted_uninterpreted_options(
+      const pb::RepeatedPtrField<pb::UninterpretedOption>& options) const {
+        return maybe_sorted(
+          options, std::less{}, [](const pb::UninterpretedOption& o) {
+              return fmt::format("{}", o);
+          });
     }
 
     void render_field(
@@ -784,12 +888,8 @@ struct protobuf_schema_definition::impl {
               },
               field_options());
 
-            auto uninterpreted_options = maybe_sorted(
-              options.uninterpreted_option(),
-              std::less{},
-              [](const auto& option) {
-                  return fmt::format("{}", fmt::join(option.name(), ""));
-              });
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              options.uninterpreted_option());
             for (const auto& option : uninterpreted_options) {
                 maybe_print_seperator();
                 fmt::print(os, "{}", option);
@@ -807,16 +907,44 @@ struct protobuf_schema_definition::impl {
         }
     }
 
-    void render_extension(
+    template<typename Descriptor>
+    void render_extensions(
       std::ostream& os,
       pb::Edition edition,
-      const google::protobuf::FieldDescriptorProto& field,
-      const google::protobuf::FieldDescriptor* descriptor,
+      const pb::RepeatedPtrField<pb::FieldDescriptorProto>& raw_extensions,
+      const Descriptor& descriptor,
       int indent) const {
-        // Render the field as an extension
-        fmt::print(os, "{:{}}extend {} {{\n", "", indent, field.extendee());
-        render_field(os, edition, field, descriptor, indent + 2);
-        fmt::print(os, "{:{}}}}\n", "", indent);
+        auto extensions = maybe_sorted(
+          raw_extensions, std::less{}, [](const auto& extension) {
+              return std::make_pair(extension.extendee(), extension.number());
+          });
+
+        const auto start_section = [indent, &os](std::string_view ext) {
+            fmt::print(os, "{:{}}extend {} {{\n", "", indent, ext);
+        };
+        const auto close_section = [indent, &os]() {
+            fmt::print(os, "{:{}}}}\n", "", indent);
+        };
+
+        std::string active_extendee{};
+        bool open_section = false;
+        for (const auto& extension : extensions) {
+            auto d = descriptor.FindExtensionByName(extension.name());
+
+            const auto& extendee = extension.extendee();
+            if (active_extendee != extendee) {
+                active_extendee = extendee;
+                if (open_section) {
+                    close_section();
+                }
+                start_section(extendee);
+                open_section = true;
+            }
+            render_field(os, edition, extension, d, indent + 2);
+        }
+        if (open_section) {
+            close_section();
+        }
     }
 
     // Render a message, including nested messages
@@ -864,12 +992,8 @@ struct protobuf_schema_definition::impl {
                   message.options().no_standard_descriptor_accessor());
             }
         }
-        auto uninterepreted_options = maybe_sorted(
-          message.options().uninterpreted_option(),
-          std::less{},
-          [](const auto& option) {
-              return fmt::format("{}", fmt::join(option.name(), ""));
-          });
+        auto uninterepreted_options = maybe_sorted_uninterpreted_options(
+          message.options().uninterpreted_option());
         for (const auto& option : uninterepreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
         }
@@ -934,6 +1058,11 @@ struct protobuf_schema_definition::impl {
         for (const int i : oneofs) {
             const auto& decl = message.oneof_decl(i);
             fmt::print(os, "{:{}}oneof {} {{\n", "", indent + 2, decl.name());
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              decl.options().uninterpreted_option());
+            for (const auto& option : uninterpreted_options) {
+                fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
+            }
             auto fields = maybe_sorted(
               message.field(),
               std::ranges::less{},
@@ -958,11 +1087,8 @@ struct protobuf_schema_definition::impl {
               range.end() - 1);
         }
 
-        // Render extensions
-        for (const auto& extension : message.extension()) {
-            auto d = descriptor->FindExtensionByName(extension.name());
-            render_extension(os, edition, extension, d, indent + 2);
-        }
+        render_extensions(
+          os, edition, message.extension(), *descriptor, indent + 2);
 
         auto nested_messages = std::views::filter(
           message.nested_type(),
@@ -1035,7 +1161,9 @@ struct protobuf_schema_definition::impl {
               indent + 2,
               enum_proto.options().deprecated());
         }
-        for (const auto& option : enum_proto.options().uninterpreted_option()) {
+        auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+          enum_proto.options().uninterpreted_option());
+        for (const auto& option : uninterpreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
         }
         std::optional<std::decay_t<decltype(enum_proto.value())>> values;
@@ -1068,10 +1196,11 @@ struct protobuf_schema_definition::impl {
                 }
                 if (!value.options().uninterpreted_option().empty()) {
                     maybe_print_comma();
+                    auto uninterpreted_options
+                      = maybe_sorted_uninterpreted_options(
+                        value.options().uninterpreted_option());
                     fmt::print(
-                      os,
-                      "{}",
-                      fmt::join(value.options().uninterpreted_option(), ", "));
+                      os, "{}", fmt::join(uninterpreted_options, ", "));
                 }
                 fmt::print(os, "]");
             }
@@ -1095,12 +1224,8 @@ struct protobuf_schema_definition::impl {
                   indent + 2,
                   service.options().deprecated());
             }
-            auto uninterpreted_options = maybe_sorted(
-              service.options().uninterpreted_option(),
-              std::less{},
-              [](const pb::UninterpretedOption& o) {
-                  return fmt::format("{}", fmt::join(o.name(), ""));
-              });
+            auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+              service.options().uninterpreted_option());
             for (const auto& option : uninterpreted_options) {
                 fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
             }
@@ -1108,7 +1233,7 @@ struct protobuf_schema_definition::impl {
         for (const auto& method : service.method()) {
             fmt::print(
               os,
-              "{:{}}rpc {} ({}{}) returns ({}{});\n",
+              "{:{}}rpc {} ({}{}) returns ({}{})",
               "",
               indent + 2,
               method.name(),
@@ -1117,6 +1242,7 @@ struct protobuf_schema_definition::impl {
               method.server_streaming() ? "stream " : "",
               method.output_type());
             if (method.has_options()) {
+                fmt::print(os, " {{\n");
                 if (method.options().has_deprecated()) {
                     fmt::print(
                       os,
@@ -1134,15 +1260,14 @@ struct protobuf_schema_definition::impl {
                       pb::MethodOptions_IdempotencyLevel_Name(
                         method.options().idempotency_level()));
                 }
-                auto uninterpreted_options = maybe_sorted(
-                  method.options().uninterpreted_option(),
-                  std::less{},
-                  [](const pb::UninterpretedOption& o) {
-                      return fmt::format("{}", fmt::join(o.name(), ""));
-                  });
+                auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+                  method.options().uninterpreted_option());
                 for (const auto& option : uninterpreted_options) {
-                    fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
+                    fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
                 }
+                fmt::print(os, "{:{}}}}\n", "", indent + 2);
+            } else {
+                fmt::print(os, ";\n");
             }
         }
         fmt::print(os, "{:{}}}}\n", "", indent);
@@ -1216,12 +1341,8 @@ struct protobuf_schema_definition::impl {
         if (options.has_py_generic_services()) {
             printv("py_generic_services", options.py_generic_services());
         }
-        auto uninterpreted_options = maybe_sorted(
-          options.uninterpreted_option(),
-          std::less{},
-          [](const pb::UninterpretedOption& o) {
-              return fmt::format("{}", fmt::join(o.name(), ""));
-          });
+        auto uninterpreted_options = maybe_sorted_uninterpreted_options(
+          options.uninterpreted_option());
         for (const auto& option : uninterpreted_options) {
             first_option = false;
             fmt::print(os, "option {};\n", option);
@@ -1324,10 +1445,7 @@ struct protobuf_schema_definition::impl {
             render_enum(os, enum_proto, 0);
         }
 
-        for (const auto& extension : fdp.extension()) {
-            auto d = descriptor.FindExtensionByName(extension.name());
-            render_extension(os, edition, extension, d, 0);
-        }
+        render_extensions(os, edition, fdp.extension(), descriptor, 0);
 
         if ((fdp.message_type_size() + fdp.enum_type_size()) != 0) {
             fmt::print(os, "\n");
