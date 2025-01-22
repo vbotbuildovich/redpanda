@@ -24,8 +24,9 @@ configuration::configuration()
   : brokers(
     *this,
     "brokers",
-    "List of address and port of the brokers",
-    {.required = config::required::yes},
+    "Network addresses of the Kafka API servers to which the HTTP Proxy "
+    "client should connect.",
+    {},
     std::vector<net::unresolved_address>({{"127.0.0.1", 9092}}))
   , broker_tls(
       *this,
