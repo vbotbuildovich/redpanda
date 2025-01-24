@@ -91,31 +91,20 @@ TEST_P_CORO(monitor_test_fixture, truncation_detection) {
 
     for (auto& [id, node] : nodes()) {
         if (id == leader) {
-            node->on_dispatch([](model::node_id, raft::msg_type mt) {
-                if (mt == raft::msg_type::append_entries) {
-                    throw std::runtime_error("dropping_append_entries");
-                }
-                return ss::now();
-            });
+            node->on_dispatch(
+              [](model::node_id, raft::msg_type) { return ss::sleep(3s); });
         }
     }
 
-    std::vector<ss::future<>> enqueued;
-    std::vector<ss::future<result<raft::replicate_result>>> replicated;
-
+    std::vector<ss::future<result<replicate_result>>> replicate_f;
+    replicate_f.reserve(num_waiters());
     for (auto i = 0; i < num_waiters(); i++) {
-        auto stages = raft->replicate_in_stages(
+        replicate_f.push_back(raft->replicate(
           make_batches({{"k", "v"}}),
-          replicate_options{raft::consistency_level::quorum_ack});
-        enqueued.push_back(std::move(stages.request_enqueued));
-        replicated.push_back(std::move(stages.replicate_finished));
+          replicate_options{raft::consistency_level::quorum_ack}));
     }
-    auto enqueue_results = co_await ss::when_all(
-      enqueued.begin(), enqueued.end());
-    // block new leadership and step down
-    raft->block_new_leadership();
-    co_await raft->step_down(model::term_id(2), "test");
-    auto results = co_await ss::when_all(replicated.begin(), replicated.end());
+    auto results = co_await ss::when_all(
+      replicate_f.begin(), replicate_f.end());
     for (auto& r : results) {
         auto res = r.get();
         ASSERT_TRUE_CORO(res.has_error());
