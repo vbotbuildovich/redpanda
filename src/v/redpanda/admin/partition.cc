@@ -645,7 +645,7 @@ void admin_server::register_partition_routes() {
                       if (it.second->get_leader_id() == std::nullopt) {
                           s.leaderless += 1;
                       }
-                      if (it.second->get_under_replicated() == std::nullopt) {
+                      if (it.second->get_under_replicated() > 0) {
                           s.under_replicated += 1;
                       }
                   }

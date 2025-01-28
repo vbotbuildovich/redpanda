@@ -1339,6 +1339,10 @@ class Admin:
         path = f"debug/partition/{namespace}/{topic}/{partition}"
         return self._request("GET", path, node=node).json()
 
+    def get_partitions_local_summary(self, node: ClusterNode):
+        path = f"partitions/local_summary"
+        return self._request("GET", path, node=node).json()
+
     def get_local_storage_usage(self, node=None):
         """
         Get the local storage usage report.
