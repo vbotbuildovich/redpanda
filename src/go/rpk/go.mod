@@ -37,8 +37,8 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_model v0.6.1
-	github.com/prometheus/common v0.59.1
-	github.com/redpanda-data/common-go/rpadmin v0.1.7
+	github.com/prometheus/common v0.60.1
+	github.com/redpanda-data/common-go/rpadmin v0.1.13
 	github.com/rs/xid v1.6.0
 	github.com/safchain/ethtool v0.4.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
