@@ -47,6 +47,7 @@
 
 #include <absl/container/flat_hash_set.h>
 #include <absl/strings/ascii.h>
+#include <absl/strings/escaping.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/container/flat_set.hpp>
 #include <boost/range/combine.hpp>
@@ -78,6 +79,16 @@
 #include <ranges>
 #include <string_view>
 #include <unordered_set>
+
+namespace {
+
+// Protobuf string values need to be quoted and escaped
+// as they may contain characters like '\'
+auto pb_string_value(const std::string_view v) {
+    return fmt::format("\"{}\"", absl::CEscape(v));
+}
+
+} // namespace
 
 struct indent_formatter : fmt::formatter<std::string_view> {
     using Base = fmt::formatter<std::string_view>;
@@ -140,9 +151,9 @@ struct fmt::formatter<google::protobuf::UninterpretedOption>
                 if (option.has_string_value()) {
                     return fmt::format_to(
                       ctx.out(),
-                      "{} = {:?}",
+                      "{} = {}",
                       fmt::join(option.name(), "."),
-                      val);
+                      pb_string_value(val));
                 }
             }
             if (option.has_aggregate_value()) {
@@ -922,7 +933,8 @@ struct protobuf_schema_definition::impl {
         }
         if (field.has_json_name()) {
             maybe_print_seperator();
-            fmt::print(os, "json_name = {:?}", field.json_name());
+            fmt::print(
+              os, "json_name = {}", pb_string_value(field.json_name()));
         }
         if (field.has_options()) {
             const auto& options = field.options();
@@ -1078,11 +1090,12 @@ struct protobuf_schema_definition::impl {
 
         if (decl.has_full_name()) {
             maybe_print_seperator();
-            fmt::print(os, "{}: {:?}", "full_name", decl.full_name());
+            fmt::print(
+              os, "{}: {}", "full_name", pb_string_value(decl.full_name()));
         }
         if (decl.has_type()) {
             maybe_print_seperator();
-            fmt::print(os, "{}: {:?}", "type", decl.type());
+            fmt::print(os, "{}: {}", "type", pb_string_value(decl.type()));
         }
         if (decl.has_number()) {
             maybe_print_seperator();
@@ -1165,7 +1178,7 @@ struct protobuf_schema_definition::impl {
         auto reserved_names = maybe_sorted(message.reserved_name());
         if (!reserved_names.empty()) {
             const auto to_debug_string = [](const std::string_view strv) {
-                return fmt::format("{:?}", strv);
+                return fmt::format("{}", pb_string_value(strv));
             };
             fmt::print(
               os,
@@ -1294,7 +1307,12 @@ struct protobuf_schema_definition::impl {
             fmt::print(os, ";\n");
         }
         for (const auto& value : maybe_sorted(enum_proto.reserved_name())) {
-            fmt::print(os, "{:{}}reserved {:?};\n", "", indent + 2, value);
+            fmt::print(
+              os,
+              "{:{}}reserved {};\n",
+              "",
+              indent + 2,
+              pb_string_value(value));
         }
         if (enum_proto.options().has_allow_alias()) {
             fmt::print(
@@ -1436,7 +1454,7 @@ struct protobuf_schema_definition::impl {
             first_option = false;
         };
         auto prints = [&](std::string_view name, const auto& val) {
-            fmt::print(os, "option {} = {:?};\n", name, val);
+            fmt::print(os, "option {} = {};\n", name, pb_string_value(val));
             first_option = false;
         };
         if (options.has_cc_enable_arenas()) {
@@ -1553,7 +1571,7 @@ struct protobuf_schema_definition::impl {
 
         auto print_deps = [&](const auto& view, std::string_view type) {
             for (const auto& dep : view) {
-                fmt::print(os, "import {}{:?};\n", type, dep);
+                fmt::print(os, "import {}{};\n", type, pb_string_value(dep));
             }
         };
 
@@ -1568,7 +1586,7 @@ struct protobuf_schema_definition::impl {
       const pb::FileDescriptor& descriptor) const {
         auto syntax = fdp.has_syntax() ? fdp.syntax() : "proto2";
         std::string_view edition = syntax;
-        fmt::print(os, "syntax = \"{}\";\n", syntax);
+        fmt::print(os, "syntax = {};\n", pb_string_value(syntax));
 
         if (fdp.has_package() && !fdp.package().empty()) {
             fmt::print(os, "package {};\n", fdp.package());
