@@ -799,7 +799,7 @@ struct protobuf_schema_definition::impl {
 
     void render_field(
       std::ostream& os,
-      std::string_view edition,
+      pb::Edition edition,
       const pb::FieldDescriptorProto& field,
       const pb::FieldDescriptor* descriptor,
       int indent,
@@ -859,7 +859,7 @@ struct protobuf_schema_definition::impl {
         };
 
         const auto label = [&]() {
-            bool is_proto2 = edition == "proto2";
+            bool is_proto2 = edition == pb::Edition::EDITION_PROTO2;
             if(descriptor && 
                 (descriptor->is_map() || descriptor->real_containing_oneof() ||
                 ((descriptor->is_optional() && !field.proto3_optional()) && !(is_proto2 && !descriptor->containing_oneof())))) {
@@ -989,7 +989,7 @@ struct protobuf_schema_definition::impl {
     template<typename Descriptor>
     void render_extensions(
       std::ostream& os,
-      std::string_view edition,
+      pb::Edition edition,
       const pb::RepeatedPtrField<pb::FieldDescriptorProto>& raw_extensions,
       const Descriptor& descriptor,
       int indent) const {
@@ -1127,7 +1127,7 @@ struct protobuf_schema_definition::impl {
     // Render a message, including nested messages
     void render_nested(
       std::ostream& os,
-      std::string_view edition,
+      pb::Edition edition,
       const std::optional<pb::FieldDescriptorProto>& field,
       const pb::FieldDescriptor* field_descriptor,
       const pb::DescriptorProto& message,
@@ -1595,9 +1595,18 @@ struct protobuf_schema_definition::impl {
       std::ostream& os,
       const pb::FileDescriptorProto& fdp,
       const pb::FileDescriptor& descriptor) const {
-        auto syntax = fdp.has_syntax() ? fdp.syntax() : "proto2";
-        std::string_view edition = syntax;
-        fmt::print(os, "syntax = {};\n", pb_string_value(syntax));
+        auto edition = fdp.edition();
+        if (edition == pb::Edition::EDITION_UNKNOWN) {
+            auto syntax = fdp.has_syntax() ? fdp.syntax() : "proto2";
+            edition = syntax == "proto3" ? pb::Edition::EDITION_PROTO3
+                                         : pb::Edition::EDITION_PROTO2;
+            fmt::print(os, "syntax = {};\n", pb_string_value(syntax));
+        } else {
+            fmt::print(
+              os,
+              "edition = {};\n",
+              pb_string_value(Edition_Name(fdp.edition())));
+        }
 
         if (fdp.has_package() && !fdp.package().empty()) {
             fmt::print(os, "package {};\n", fdp.package());
