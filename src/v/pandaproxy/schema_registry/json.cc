@@ -2205,6 +2205,13 @@ void sort(json::Value& val) {
     }
 }
 
+constexpr const char* id_keyword(json_schema_dialect jsd) {
+    if (jsd == json_schema_dialect::draft4) {
+        return "id";
+    }
+    return "$id";
+}
+
 void collect_bundled_schemas_and_fix_refs(
   id_to_schema_pointer& bundled_schemas,
   jsoncons::uri base_uri,
@@ -2343,8 +2350,7 @@ result<id_to_schema_pointer> collect_bundled_schema_and_fix_refs(
             return json_id_uri{""};
         }
 
-        auto id_it = doc.find(
-          dialect == json_schema_dialect::draft4 ? "id" : "$id");
+        auto id_it = doc.find(id_keyword(dialect));
         if (id_it == doc.object_range().end()) {
             // no explicit id, use the empty string
             return json_id_uri{""};
